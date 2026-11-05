@@ -1,0 +1,14 @@
+{
+  "sensor": {
+    "ruangan_1": {
+      "gas": 45,
+      "flame": 0,
+      "status": "AMAN"
+    },
+    "ruangan_2": {
+      "gas": 30,
+      "flame": 0,
+      "status": "AMAN"
+    }
+  }
+}

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ubah Password - Safety Fire IoT</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 320px; }
+    h2 { text-align: center; margin-bottom: 20px; color: #333; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+    input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; background-color: #ffc107; border: none; color: #333; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+    button:hover { background-color: #e0a800; }
+    .back-btn { background-color: #6c757d; color: white; margin-top: 5px; }
+    .back-btn:hover { background-color: #5a6268; }
+  </style>
+
+  <!-- Firebase SDK versi 8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+<div class="card">
+  <h2>Ubah Password</h2>
+  <form id="changePasswordForm">
+    <div class="form-group">
+      <label>Password Lama:</label>
+      <input type="password" id="oldPassword" placeholder="Masukkan password lama" required>
+    </div>
+    <div class="form-group">
+      <label>Password Baru:</label>
+      <input type="password" id="newPassword" placeholder="Masukkan password baru" required>
+    </div>
+    <button type="submit">Simpan Password Baru</button>
+    <button type="button" class="back-btn" onclick="window.location.href='index.html'">Kembali ke Dashboard</button>
+  </form>
+</div>
+
+<script>
+  // Cek sesi login
+  const session = JSON.parse(localStorage.getItem('userLoggedIn'));
+  if (!session) {
+    window.location.href = "login.html";
+  }
+
+  // Konfigurasi Firebase
+  const firebaseConfig = {
+    databaseURL: "https://sefty-fire-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  document.getElementById('changePasswordForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const oldPassword = document.getElementById('oldPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const userKey = session.key; // ruangan_1 atau ruangan_2
+
+    // Ambil data user dari Firebase untuk verifikasi password lama
+    database.ref('users/' + userKey).once('value').then((snapshot) => {
+      const data = snapshot.val();
+      
+      if (data && data.password === oldPassword) {
+        // Update password baru ke Firebase
+        database.ref('users/' + userKey).update({
+          password: newPassword
+        }).then(() => {
+          alert("Password berhasil diubah! Silakan login ulang.");
+          localStorage.removeItem('userLoggedIn');
+          window.location.href = "login.html";
+        }).catch((err) => {
+          alert("Gagal mengubah password: " + err.message);
+        });
+      } else {
+        alert("Password lama salah!");
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

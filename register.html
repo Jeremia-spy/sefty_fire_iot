@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register Penghuni - Safety Fire IoT</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f4f6f9; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 320px; }
+    h2 { text-align: center; margin-bottom: 20px; color: #333; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+    input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; background-color: #28a745; border: none; color: white; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+    button:hover { background-color: #218838; }
+    p { text-align: center; font-size: 14px; margin-top: 15px; }
+    a { color: #007bff; text-decoration: none; }
+  </style>
+
+  <!-- Firebase SDK versi 8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+<div class="card">
+  <h2>Registrasi Penghuni</h2>
+  <form id="registerForm">
+    <div class="form-group">
+      <label>Pilih Ruangan / Sensor:</label>
+      <div class="form-group">
+  <label>Nomor Kamar:</label>
+  <select id="ruanganKey" required>
+    <option value="ruangan_1">Kamar 1</option>
+    <option value="ruangan_2">Kamar 2</option>
+    <option value="ruangan_3">Kamar 3</option>
+    <option value="ruangan_4">Kamar 4</option>
+  </select>
+</div>
+    </div>
+    <div class="form-group">
+      <label>Nama Pengguna:</label>
+      <input type="text" id="namaPengguna" placeholder="Masukkan nama Anda" required>
+    </div>
+    <div class="form-group">
+      <label>Password:</label>
+      <input type="password" id="password" placeholder="Buat password" required>
+    </div>
+    <button type="submit">Daftar Akun</button>
+  </form>
+  <p>Sudah punya akun? <a href="login.html">Login di sini</a></p>
+</div>
+
+<script>
+  // Konfigurasi Firebase
+  const firebaseConfig = {
+    databaseURL: "https://sefty-fire-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  document.getElementById('registerForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const key = document.getElementById('ruanganKey').value;
+    const nama = document.getElementById('namaPengguna').value;
+    const password = document.getElementById('password').value;
+    const labelKamar = key === 'ruangan_1' ? 'Sensor 1 (Dapur)' : 'Sensor 2 (Kamar)';
+
+    // Simpan ke Firebase Realtime Database bawah node 'users'
+    database.ref('users/' + key).set({
+      nama: nama,
+      nomor_kamar: labelKamar,
+      password: password
+    }).then(() => {
+      alert("Registrasi berhasil! Silakan login.");
+      window.location.href = "login.html";
+    }).catch((err) => {
+      alert("Gagal registrasi: " + err.message);
+    });
+  });
+  const key = document.getElementById('ruanganKey').value;
+const nama = document.getElementById('namaPengguna').value;
+const password = document.getElementById('password').value;
+const labelKamar = key === 'ruangan_1' ? 'Kamar 1' : (key === 'ruangan_2' ? 'Kamar 2' : key);
+</script>
+
+</body>
+</html>

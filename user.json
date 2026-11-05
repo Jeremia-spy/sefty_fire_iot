@@ -1,0 +1,14 @@
+{
+  "users": {
+    "ruangan_1": {
+      "nama": "Jeremia",
+      "nomor_kamar": "Kamar 1 (Dapur)",
+      "password": "password123"
+    },
+    "ruangan_2": {
+      "nama": "Ahmad",
+      "nomor_kamar": "Kamar 2 (Kamar Utama)",
+      "password": "password456"
+    }
+  }
+}
