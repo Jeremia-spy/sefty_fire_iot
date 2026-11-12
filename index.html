@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Pemantauan Sensor Gas & Api - FIRESAFE</title>
+    <title>Dashboard Pemantauan Sensor - FIRESAFE</title>
     <!-- Memuat Chart.js untuk Grafik Real-time -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -22,8 +22,8 @@
         .floorplan-container { 
             position: relative; 
             width: 100%; 
-            max-width: 380px; 
-            height: 280px; 
+            max-width: 400px; 
+            height: 300px; 
             margin: 10px auto; 
             border: 2px solid #333; 
             border-radius: 6px; 
@@ -31,32 +31,34 @@
             box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
         }
 
-        /* Marker Pin Sensor Berkedip */
+        /* Marker Pin Sensor Dasar (Tanpa Animasi saat Aman) */
         .sensor-pin { 
             position: absolute; 
-            padding: 4px 8px; 
-            font-size: 10px; 
-            border-radius: 12px; 
+            padding: 6px 10px; 
+            font-size: 11px; 
+            border-radius: 8px; 
             font-weight: bold; 
             color: white; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
             z-index: 10;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            text-align: left;
+            line-height: 1.4;
         }
-        .pin-dapur { top: 35px; right: 25px; background: #e74c3c; animation: pulse-red 1.5s infinite; }
-        .pin-kamar { bottom: 35px; left: 35px; background: #3498db; animation: pulse-blue 1.5s infinite; }
+        .pin-dapur { top: 45px; right: 20px; background: rgba(52, 73, 94, 0.9); } /* Default abu-abu gelap/aman */
+        .pin-kamar { bottom: 25px; left: 25px; background: rgba(52, 73, 94, 0.9); } /* Default abu-abu gelap/aman */
+
+        /* Kelas Aktif Animasi hanya saat BAHAYA */
+        .pin-bahaya { 
+            background: rgba(231, 76, 60, 0.95) !important; 
+            animation: pulse-red 1s infinite; 
+        }
+
+        .pin-data-line { font-weight: normal; font-size: 10px; display: block; border-top: 1px solid rgba(255,255,255,0.3); margin-top: 2px; padding-top: 2px; }
 
         @keyframes pulse-red {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(231, 76, 60, 0); }
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.8); }
+            70% { transform: scale(1.06); box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
-        }
-        @keyframes pulse-blue {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 152, 219, 0.7); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(52, 152, 219, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(52, 152, 219, 0); }
         }
 
         canvas { width: 100% !important; height: 230px !important; }
@@ -67,11 +69,11 @@
 </head>
 <body>
 
-<!-- Header Selamat Datang & Navigasi -->
+<!-- Header Informasi Akun & Sesi -->
 <div class="header-container">
   <div>
     <h3 id="userWelcomeText" style="margin: 0; font-size: 18px;">Selamat Datang!</h3>
-    <small id="userSubText" style="color: #bdc3c7;">Monitoring Sensor Realtime</small>
+    <small id="userSubText" style="color: #bdc3c7;">Sistem Monitoring Realtime</small>
   </div>
   <div>
     <button onclick="window.location.href='ubah_password.html'" style="background-color: #f39c12; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-right: 5px;">Ubah Password</button>
@@ -80,7 +82,7 @@
 </div>
 
 <script>
-  // Pengecekan Sesi Login
+  // Validasi Sesi Login
   const session = JSON.parse(localStorage.getItem('userLoggedIn'));
   if (!session) {
     window.location.href = "login.html";
@@ -97,8 +99,9 @@
 
     <h1>FIRESAFE - Dashboard Pemantauan Sensor</h1>
     
+    <!-- 2 Kotak Ringkasan Sensor (Dapur & Kamar) -->
     <div class="container">
-        <!-- Kotak Ringkasan Sensor 1 (Dapur) -->
+        <!-- Sensor 1 (Dapur / Ruangan 1) -->
         <div class="card">
             <h2>Sensor 1 (Dapur)</h2>
             <p>Kadar Gas (MQ-2): <span id="gas-r1">Memuat...</span></p>
@@ -106,7 +109,7 @@
             <p>Status: <span id="status-r1" class="status-aman">Memuat...</span></p>
         </div>
 
-        <!-- Kotak Ringkasan Sensor 2 (Kamar) -->
+        <!-- Sensor 2 (Kamar / Ruangan 2) -->
         <div class="card">
             <h2>Sensor 2 (Kamar)</h2>
             <p>Kadar Gas (MQ-2): <span id="gas-r2">Memuat...</span></p>
@@ -115,13 +118,12 @@
         </div>
     </div>
 
-    <!-- Denah Ruangan Cetak Biru (Bagian Atas Dashboard) -->
+    <!-- Denah Ruangan dengan Nilai Sensor Real-time di Setiap Titik -->
     <div style="width: 95%; margin: 20px auto 0 auto;">
-        <div class="section-box" style="width: 100%; max-width: 800px; margin: 0 auto 20px auto;">
+        <div class="section-box" style="width: 100%; max-width: 600px; margin: 0 auto 20px auto;">
             <h3 style="margin-bottom: 5px;">Denah Lokasi Sensor (Dapur & Kamar)</h3>
             <div class="floorplan-container">
                 <svg width="100%" height="100%" viewBox="0 0 360 280" style="background:#f7f9fa;">
-                    <!-- Grid background -->
                     <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                         <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e1e8ed" stroke-width="0.8"/>
                     </pattern>
@@ -132,65 +134,68 @@
 
                     <!-- Kamar Tidur (Kiri Bawah) -->
                     <rect x="20" y="120" width="160" height="140" fill="#ebf5fb" stroke="#2c3e50" stroke-width="3"/>
-                    <text x="30" y="140" font-size="12" font-weight="bold" fill="#2980b9">Ruang Tidur / Kamar</text>
+                    <text x="30" y="140" font-size="11" font-weight="bold" fill="#2980b9">Ruang Tidur / Kamar</text>
                     <!-- Kasur -->
-                    <rect x="30" y="180" width="70" height="70" rx="4" fill="#d4efdf" stroke="#27ae60" stroke-width="1.5"/>
-                    <rect x="35" y="185" width="25" height="15" rx="2" fill="#fff"/>
-                    <rect x="68" y="185" width="25" height="15" rx="2" fill="#fff"/>
-                    <text x="50" y="225" font-size="10" fill="#1e8449">Tempat Tidur</text>
+                    <rect x="30" y="170" width="65" height="60" rx="4" fill="#d4efdf" stroke="#27ae60" stroke-width="1.5"/>
+                    <rect x="35" y="175" width="22" height="12" rx="2" fill="#fff"/>
+                    <rect x="65" y="175" width="22" height="12" rx="2" fill="#fff"/>
 
                     <!-- Toilet / WC (Kiri Atas) -->
                     <rect x="20" y="20" width="120" height="100" fill="#f4ecf7" stroke="#2c3e50" stroke-width="3"/>
-                    <text x="30" y="40" font-size="12" font-weight="bold" fill="#8e44ad">WC / Toilet</text>
-                    <circle cx="50" cy="70" r="12" fill="#fff" stroke="#8e44ad" stroke-width="1.5"/>
+                    <text x="30" y="40" font-size="11" font-weight="bold" fill="#8e44ad">WC / Toilet</text>
+                    <circle cx="50" cy="70" r="11" fill="#fff" stroke="#8e44ad" stroke-width="1.5"/>
 
-                    <!-- Dapur & Koridor (Kanan) -->
+                    <!-- Area Dapur (Kanan Atas) -->
                     <rect x="180" y="20" width="160" height="140" fill="#fdedec" stroke="#2c3e50" stroke-width="3"/>
-                    <text x="190" y="40" font-size="12" font-weight="bold" fill="#c0392b">Area Dapur</text>
+                    <text x="190" y="40" font-size="11" font-weight="bold" fill="#c0392b">Area Dapur</text>
                     <!-- Meja Kompor -->
-                    <rect x="250" y="25" width="85" height="35" fill="#f5b7b1" stroke="#c0392b" stroke-width="1.5"/>
-                    <circle cx="270" cy="42" r="6" fill="#78281f"/>
-                    <circle cx="310" cy="42" r="6" fill="#78281f"/>
+                    <rect x="250" y="25" width="85" height="30" fill="#f5b7b1" stroke="#c0392b" stroke-width="1.5"/>
 
                     <!-- Koridor -->
                     <path d="M 180 200 L 180 240" stroke="#7f8c8d" stroke-width="2" stroke-dasharray="3,3"/>
                     <text x="210" y="220" font-size="11" fill="#7f8c8d">Koridor Utama</text>
                 </svg>
 
-                <!-- Pin Indikator Sensor -->
-                <div class="sensor-pin pin-dapur">🔥 Sensor 1 (Dapur)</div>
-                <div class="sensor-pin pin-kamar">📡 Sensor 2 (Kamar)</div>
+                <!-- Pin Sensor 1 (Dapur) -->
+                <div id="pinBoxDapur" class="sensor-pin pin-dapur">
+                    🔥 Sensor 1 (Dapur)
+                    <span class="pin-data-line">Flame: <b id="pin-dapur-flame">-</b> | MQ-2: <b id="pin-dapur-gas">-</b></span>
+                </div>
+
+                <!-- Pin Sensor 2 (Kamar) -->
+                <div id="pinBoxKamar" class="sensor-pin pin-kamar">
+                    📡 Sensor 2 (Kamar)
+                    <span class="pin-data-line">Flame: <b id="pin-kamar-flame">-</b> | MQ-2: <b id="pin-kamar-gas">-</b></span>
+                </div>
             </div>
-            <p style="font-size: 12px; color: #666; margin-top: 5px;">Visual pemetaan lokasi fisik perangkat sensor.</p>
+            <p style="font-size: 12px; color: #666; margin-top: 5px;">Visual pemetaan lokasi fisik dan pembacaan nilai sensor real-time.</p>
         </div>
     </div>
 
-    <!-- Dua Grafik Terpisah Ber-style Indikator Medis (EKG) -->
+    <!-- Dua Grafik Terpisah: Khusus Gas & Khusus Api -->
     <div class="dashboard-grid">
-        
-        <!-- GRAFIK 1: SENSOR 1 (DAPUR) -->
+        <!-- Grafik 1: Sensor Gas MQ-2 -->
         <div class="section-box">
-            <h3 style="margin-bottom: 5px; color: #c0392b;">Grafik Real-time Sensor 1 (Dapur)</h3>
-            <canvas id="chartDapur"></canvas>
+            <h3 style="margin-bottom: 5px;">Grafik Real-time Sensor Gas (MQ-2)</h3>
+            <canvas id="gasChart"></canvas>
             <div class="legend-box">
-                <div class="legend-item"><span class="legend-color" style="background: rgb(231, 76, 60);"></span>Flame Sensor KY-026 (Dapur)</div>
-                <div class="legend-item"><span class="legend-color" style="background: rgb(230, 126, 34);"></span>Sensor Gas MQ-2 (Dapur)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(230, 126, 34);"></span>Gas Dapur (R1)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(46, 204, 113);"></span>Gas Kamar (R2)</div>
             </div>
         </div>
 
-        <!-- GRAFIK 2: SENSOR 2 (KAMAR) -->
+        <!-- Grafik 2: Sensor Api KY-026 -->
         <div class="section-box">
-            <h3 style="margin-bottom: 5px; color: #2980b9;">Grafik Real-time Sensor 2 (Kamar)</h3>
-            <canvas id="chartKamar"></canvas>
+            <h3 style="margin-bottom: 5px;">Grafik Real-time Sensor Api (KY-026)</h3>
+            <canvas id="flameChart"></canvas>
             <div class="legend-box">
-                <div class="legend-item"><span class="legend-color" style="background: rgb(155, 89, 182);"></span>Flame Sensor KY-026 (Kamar)</div>
-                <div class="legend-item"><span class="legend-color" style="background: rgb(46, 204, 113);"></span>Sensor Gas MQ-2 (Kamar)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(231, 76, 60);"></span>Api Dapur (R1)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(155, 89, 182);"></span>Api Kamar (R2)</div>
             </div>
         </div>
-
     </div>
 
-    <!-- Script JavaScript untuk Firebase & Kedua Grafik Berjalan -->
+    <!-- Script JavaScript untuk Firebase & Logika Animasi Kondisional -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
@@ -202,76 +207,32 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // 1. Inisialisasi Grafik Sensor 1 (Dapur)
-        const ctxDapur = document.getElementById('chartDapur').getContext('2d');
-        const chartDapur = new Chart(ctxDapur, {
+        // Inisialisasi Grafik 1 (Gas)
+        const ctxGas = document.getElementById('gasChart').getContext('2d');
+        const gasChart = new Chart(ctxGas, {
             type: 'line',
             data: {
                 labels: [],
                 datasets: [
-                    { 
-                        label: 'Api Dapur', 
-                        borderColor: 'rgb(231, 76, 60)', 
-                        backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                        data: [], 
-                        fill: true, 
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 2
-                    },
-                    { 
-                        label: 'Gas Dapur', 
-                        borderColor: 'rgb(230, 126, 34)', 
-                        backgroundColor: 'rgba(230, 126, 34, 0.1)',
-                        data: [], 
-                        fill: true, 
-                        tension: 0.3, 
-                        borderWidth: 2,
-                        pointRadius: 2
-                    }
+                    { label: 'Gas Dapur (R1)', borderColor: 'rgb(230, 126, 34)', backgroundColor: 'rgba(230, 126, 34, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Gas Kamar (R2)', borderColor: 'rgb(46, 204, 113)', backgroundColor: 'rgba(46, 204, 113, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }
                 ]
             },
-            options: {
-                responsive: true,
-                animation: false,
-                scales: { y: { beginAtZero: true, suggestedMax: 300 } }
-            }
+            options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, suggestedMax: 300 } } }
         });
 
-        // 2. Inisialisasi Grafik Sensor 2 (Kamar)
-        const ctxKamar = document.getElementById('chartKamar').getContext('2d');
-        const chartKamar = new Chart(ctxKamar, {
+        // Inisialisasi Grafik 2 (Api)
+        const ctxFlame = document.getElementById('flameChart').getContext('2d');
+        const flameChart = new Chart(ctxFlame, {
             type: 'line',
             data: {
                 labels: [],
                 datasets: [
-                    { 
-                        label: 'Api Kamar', 
-                        borderColor: 'rgb(155, 89, 182)', 
-                        backgroundColor: 'rgba(155, 89, 182, 0.1)',
-                        data: [], 
-                        fill: true, 
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 2
-                    },
-                    { 
-                        label: 'Gas Kamar', 
-                        borderColor: 'rgb(46, 204, 113)', 
-                        backgroundColor: 'rgba(46, 204, 113, 0.1)',
-                        data: [], 
-                        fill: true, 
-                        tension: 0.3, 
-                        borderWidth: 2,
-                        pointRadius: 2
-                    }
+                    { label: 'Api Dapur (R1)', borderColor: 'rgb(231, 76, 60)', backgroundColor: 'rgba(231, 76, 60, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Api Kamar (R2)', borderColor: 'rgb(155, 89, 182)', backgroundColor: 'rgba(155, 89, 182, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }
                 ]
             },
-            options: {
-                responsive: true,
-                animation: false,
-                scales: { y: { beginAtZero: true, suggestedMax: 300 } }
-            }
+            options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, suggestedMax: 5 } } }
         });
 
         let timeLabels = [];
@@ -284,46 +245,64 @@
                 const r1 = data.ruangan_1 || { gas: 0, flame: 0, status: 'AMAN' };
                 const r2 = data.ruangan_2 || { gas: 0, flame: 0, status: 'AMAN' };
 
-                // Update Teks Dapur (Sensor 1)
+                // 1. Update Sensor 1 (Dapur)
                 document.getElementById('gas-r1').innerText = r1.gas;
                 document.getElementById('flame-r1').innerText = r1.flame === 1 ? 'Ada Api!' : 'Aman';
                 let statusR1 = document.getElementById('status-r1');
                 statusR1.innerText = r1.status || 'AMAN';
                 statusR1.className = (r1.status && r1.status.toUpperCase() === 'BAHAYA') ? 'status-bahaya' : 'status-aman';
 
-                // Update Teks Kamar (Sensor 2)
+                document.getElementById('pin-dapur-flame').innerText = r1.flame;
+                document.getElementById('pin-dapur-gas').innerText = r1.gas;
+
+                // Logika Animasi Denah Dapur (Hanya berkedip jika BAHAYA)
+                let pinDapur = document.getElementById('pinBoxDapur');
+                if (r1.status && r1.status.toUpperCase() === 'BAHAYA') {
+                    pinDapur.classList.add('pin-bahaya');
+                } else {
+                    pinDapur.classList.remove('pin-bahaya');
+                }
+
+                // 2. Update Sensor 2 (Kamar)
                 document.getElementById('gas-r2').innerText = r2.gas;
                 document.getElementById('flame-r2').innerText = r2.flame === 1 ? 'Ada Api!' : 'Aman';
                 let statusR2 = document.getElementById('status-r2');
                 statusR2.innerText = r2.status || 'AMAN';
                 statusR2.className = (r2.status && r2.status.toUpperCase() === 'BAHAYA') ? 'status-bahaya' : 'status-aman';
 
-                // Perbarui Waktu Sumbu X Grafik Berjalan
-                const currentTime = new Date().toLocaleTimeString();
-                if (timeLabels.length > 15) {
-                    timeLabels.shift();
+                document.getElementById('pin-kamar-flame').innerText = r2.flame;
+                document.getElementById('pin-kamar-gas').innerText = r2.gas;
+
+                // Logika Animasi Denah Kamar (Hanya berkedip jika BAHAYA)
+                let pinKamar = document.getElementById('pinBoxKamar');
+                if (r2.status && r2.status.toUpperCase() === 'BAHAYA') {
+                    pinKamar.classList.add('pin-bahaya');
+                } else {
+                    pinKamar.classList.remove('pin-bahaya');
                 }
+
+                // 3. Update Grafik
+                const currentTime = new Date().toLocaleTimeString();
+                if (timeLabels.length > 15) timeLabels.shift();
                 timeLabels.push(currentTime);
 
-                // Update Data Grafik 1 (Dapur)
-                chartDapur.data.labels = timeLabels;
-                chartDapur.data.datasets[0].data.push(r1.flame);
-                chartDapur.data.datasets[1].data.push(r1.gas);
-                if (chartDapur.data.datasets[0].data.length > 15) {
-                    chartDapur.data.datasets[0].data.shift();
-                    chartDapur.data.datasets[1].data.shift();
+                gasChart.data.labels = timeLabels;
+                gasChart.data.datasets[0].data.push(r1.gas);
+                gasChart.data.datasets[1].data.push(r2.gas);
+                if (gasChart.data.datasets[0].data.length > 15) {
+                    gasChart.data.datasets[0].data.shift();
+                    gasChart.data.datasets[1].data.shift();
                 }
-                chartDapur.update();
+                gasChart.update();
 
-                // Update Data Grafik 2 (Kamar)
-                chartKamar.data.labels = timeLabels;
-                chartKamar.data.datasets[0].data.push(r2.flame);
-                chartKamar.data.datasets[1].data.push(r2.gas);
-                if (chartKamar.data.datasets[0].data.length > 15) {
-                    chartKamar.data.datasets[0].data.shift();
-                    chartKamar.data.datasets[1].data.shift();
+                flameChart.data.labels = timeLabels;
+                flameChart.data.datasets[0].data.push(r1.flame);
+                flameChart.data.datasets[1].data.push(r2.flame);
+                if (flameChart.data.datasets[0].data.length > 15) {
+                    flameChart.data.datasets[0].data.shift();
+                    flameChart.data.datasets[1].data.shift();
                 }
-                chartKamar.update();
+                flameChart.update();
             }
         });
     </script>
