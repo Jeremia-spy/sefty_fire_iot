@@ -6,13 +6,22 @@
     <title>Dashboard Pemantauan Sensor - FIRESAFE</title>
     <!-- Memuat Chart.js untuk Grafik Real-time -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDK versi 8 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; text-align: center; padding: 20px; margin: 0; }
         .header-container { background-color: #2c3e50; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; margin-bottom: 20px; }
         .container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 350px; text-align: left; }
-        .status-aman { color: green; font-weight: bold; }
-        .status-bahaya { color: red; font-weight: bold; }
+        
+        /* Warna Status FSM */
+        .status-aman { color: #27ae60; font-weight: bold; }
+        .status-waspada { color: #f39c12; font-weight: bold; }
+        .status-bahaya { color: #e74c3c; font-weight: bold; }
+
+        /* Badge Status Utama ESP32 */
+        .global-status-box { display: inline-block; background: white; padding: 10px 25px; border-radius: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); font-size: 16px; margin-bottom: 10px; }
         
         /* Layout Grid Dashboard */
         .dashboard-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 95%; margin: 20px auto 0 auto; }
@@ -31,7 +40,7 @@
             box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
         }
 
-        /* Marker Pin Sensor Dasar (Tanpa Animasi saat Aman) */
+        /* Marker Pin Sensor Dasar */
         .sensor-pin { 
             position: absolute; 
             padding: 6px 10px; 
@@ -43,11 +52,13 @@
             z-index: 10;
             text-align: left;
             line-height: 1.4;
+            transition: background 0.3s ease;
         }
-        .pin-dapur { top: 45px; right: 20px; background: rgba(52, 73, 94, 0.9); } /* Default abu-abu gelap/aman */
-        .pin-kamar { bottom: 25px; left: 25px; background: rgba(52, 73, 94, 0.9); } /* Default abu-abu gelap/aman */
+        .pin-dapur { top: 45px; right: 20px; background: rgba(52, 73, 94, 0.9); }
+        .pin-kamar { bottom: 25px; left: 25px; background: rgba(52, 73, 94, 0.9); }
 
-        /* Kelas Aktif Animasi hanya saat BAHAYA */
+        /* Kelas Aktif Pin saat WASPADA & BAHAYA */
+        .pin-waspada { background: rgba(243, 156, 18, 0.95) !important; }
         .pin-bahaya { 
             background: rgba(231, 76, 60, 0.95) !important; 
             animation: pulse-red 1s infinite; 
@@ -82,7 +93,6 @@
 </div>
 
 <script>
-  // Validasi Sesi Login
   const session = JSON.parse(localStorage.getItem('userLoggedIn'));
   if (!session) {
     window.location.href = "login.html";
@@ -98,23 +108,31 @@
 </script>
 
     <h1>FIRESAFE - Dashboard Pemantauan Sensor</h1>
+
+    <!-- Status Keseluruhan Sistem dari ESP32 -->
+    <div class="global-status-box">
+        Status Sistem Utama (FSM): <span id="status-sistem" class="status-waspada">Menghubungkan ke Firebase...</span>
+        <div style="font-size: 11px; color: #7f8c8d; margin-top: 4px;" id="last-sync-info">Menunggu data pertama...</div>
+    </div>
     
     <!-- 2 Kotak Ringkasan Sensor (Dapur & Kamar) -->
     <div class="container">
-        <!-- Sensor 1 (Dapur / Ruangan 1) -->
+        <!-- Sensor 1 (Dapur) -->
         <div class="card">
             <h2>Sensor 1 (Dapur)</h2>
             <p>Kadar Gas (MQ-2): <span id="gas-r1">Memuat...</span></p>
             <p>Sensor Api (KY-026): <span id="flame-r1">Memuat...</span></p>
-            <p>Status: <span id="status-r1" class="status-aman">Memuat...</span></p>
+            <p>Skor Risiko Fuzzy: <span id="risiko-r1">0</span> / 100</p>
+            <p>Status Area: <span id="status-r1" class="status-aman">Memuat...</span></p>
         </div>
 
-        <!-- Sensor 2 (Kamar / Ruangan 2) -->
+        <!-- Sensor 2 (Kamar) -->
         <div class="card">
             <h2>Sensor 2 (Kamar)</h2>
             <p>Kadar Gas (MQ-2): <span id="gas-r2">Memuat...</span></p>
             <p>Sensor Api (KY-026): <span id="flame-r2">Memuat...</span></p>
-            <p>Status: <span id="status-r2" class="status-aman">Memuat...</span></p>
+            <p>Skor Risiko Fuzzy: <span id="risiko-r2">0</span> / 100</p>
+            <p>Status Area: <span id="status-r2" class="status-aman">Memuat...</span></p>
         </div>
     </div>
 
@@ -179,33 +197,25 @@
             <h3 style="margin-bottom: 5px;">Grafik Real-time Sensor Gas (MQ-2)</h3>
             <canvas id="gasChart"></canvas>
             <div class="legend-box">
-                <div class="legend-item"><span class="legend-color" style="background: rgb(230, 126, 34);"></span>Gas Dapur (R1)</div>
-                <div class="legend-item"><span class="legend-color" style="background: rgb(46, 204, 113);"></span>Gas Kamar (R2)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(230, 126, 34);"></span>Gas Dapur</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(46, 204, 113);"></span>Gas Kamar</div>
             </div>
         </div>
 
         <!-- Grafik 2: Sensor Api KY-026 -->
         <div class="section-box">
-            <h3 style="margin-bottom: 5px;">Grafik Real-time Sensor Api (KY-026)</h3>
+            <h3 style="margin-bottom: 5px;">Grafik Real-time Sensor Api (KY-026 Analog)</h3>
             <canvas id="flameChart"></canvas>
             <div class="legend-box">
-                <div class="legend-item"><span class="legend-color" style="background: rgb(231, 76, 60);"></span>Api Dapur (R1)</div>
-                <div class="legend-item"><span class="legend-color" style="background: rgb(155, 89, 182);"></span>Api Kamar (R2)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(231, 76, 60);"></span>Api Dapur (<= 600 Bahaya)</div>
+                <div class="legend-item"><span class="legend-color" style="background: rgb(155, 89, 182);"></span>Api Kamar (<= 600 Bahaya)</div>
             </div>
         </div>
     </div>
 
-    <!-- Script JavaScript untuk Firebase & Logika Animasi Kondisional -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
-
-        const firebaseConfig = {
-            databaseURL: "https://sefty-fire-iot-default-rtdb.asia-southeast1.firebasedatabase.app"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+    <!-- Script JavaScript dengan Jalur Ganda (WebSocket + HTTPS) -->
+    <script>
+        const DB_URL = "https://firesafe1-default-rtdb.asia-southeast1.firebasedatabase.app";
 
         // Inisialisasi Grafik 1 (Gas)
         const ctxGas = document.getElementById('gasChart').getContext('2d');
@@ -214,11 +224,11 @@
             data: {
                 labels: [],
                 datasets: [
-                    { label: 'Gas Dapur (R1)', borderColor: 'rgb(230, 126, 34)', backgroundColor: 'rgba(230, 126, 34, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
-                    { label: 'Gas Kamar (R2)', borderColor: 'rgb(46, 204, 113)', backgroundColor: 'rgba(46, 204, 113, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }
+                    { label: 'Gas Dapur', borderColor: 'rgb(230, 126, 34)', backgroundColor: 'rgba(230, 126, 34, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Gas Kamar', borderColor: 'rgb(46, 204, 113)', backgroundColor: 'rgba(46, 204, 113, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }
                 ]
             },
-            options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, suggestedMax: 300 } } }
+            options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, suggestedMax: 1000 } } }
         });
 
         // Inisialisasi Grafik 2 (Api)
@@ -228,83 +238,145 @@
             data: {
                 labels: [],
                 datasets: [
-                    { label: 'Api Dapur (R1)', borderColor: 'rgb(231, 76, 60)', backgroundColor: 'rgba(231, 76, 60, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
-                    { label: 'Api Kamar (R2)', borderColor: 'rgb(155, 89, 182)', backgroundColor: 'rgba(155, 89, 182, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }
+                    { label: 'Api Dapur', borderColor: 'rgb(231, 76, 60)', backgroundColor: 'rgba(231, 76, 60, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 },
+                    { label: 'Api Kamar', borderColor: 'rgb(155, 89, 182)', backgroundColor: 'rgba(155, 89, 182, 0.1)', data: [], fill: true, tension: 0.3, borderWidth: 2, pointRadius: 2 }
                 ]
             },
-            options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, suggestedMax: 5 } } }
+            options: { responsive: true, animation: false, scales: { y: { beginAtZero: true, suggestedMax: 4095 } } }
         });
 
         let timeLabels = [];
+        let websocketAktif = false;
 
-        // Ambil data Real-time dari Firebase
-        const refSensor = ref(db, 'sensor');
-        onValue(refSensor, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                const r1 = data.ruangan_1 || { gas: 0, flame: 0, status: 'AMAN' };
-                const r2 = data.ruangan_2 || { gas: 0, flame: 0, status: 'AMAN' };
+        function statusDariRisiko(risiko) {
+            if (risiko >= 100) return 'BAHAYA';
+            if (risiko >= 33) return 'WASPADA';
+            return 'AMAN';
+        }
 
-                // 1. Update Sensor 1 (Dapur)
-                document.getElementById('gas-r1').innerText = r1.gas;
-                document.getElementById('flame-r1').innerText = r1.flame === 1 ? 'Ada Api!' : 'Aman';
-                let statusR1 = document.getElementById('status-r1');
-                statusR1.innerText = r1.status || 'AMAN';
-                statusR1.className = (r1.status && r1.status.toUpperCase() === 'BAHAYA') ? 'status-bahaya' : 'status-aman';
+        function formatTeksApi(flameVal, batasAman) {
+            if (flameVal <= 600) return `Api Besar! (${flameVal})`;
+            if (flameVal < batasAman) return `Api Kecil / Terdeteksi (${flameVal})`;
+            return `Aman (${flameVal})`;
+        }
 
-                document.getElementById('pin-dapur-flame').innerText = r1.flame;
-                document.getElementById('pin-dapur-gas').innerText = r1.gas;
+        function terapkanClassStatus(elemen, status, teksTampil = null) {
+            elemen.innerText = teksTampil || status;
+            if (status === 'BAHAYA') elemen.className = 'status-bahaya';
+            else if (status === 'WASPADA') elemen.className = 'status-waspada';
+            else elemen.className = 'status-aman';
+        }
 
-                // Logika Animasi Denah Dapur (Hanya berkedip jika BAHAYA)
-                let pinDapur = document.getElementById('pinBoxDapur');
-                if (r1.status && r1.status.toUpperCase() === 'BAHAYA') {
-                    pinDapur.classList.add('pin-bahaya');
-                } else {
-                    pinDapur.classList.remove('pin-bahaya');
-                }
-
-                // 2. Update Sensor 2 (Kamar)
-                document.getElementById('gas-r2').innerText = r2.gas;
-                document.getElementById('flame-r2').innerText = r2.flame === 1 ? 'Ada Api!' : 'Aman';
-                let statusR2 = document.getElementById('status-r2');
-                statusR2.innerText = r2.status || 'AMAN';
-                statusR2.className = (r2.status && r2.status.toUpperCase() === 'BAHAYA') ? 'status-bahaya' : 'status-aman';
-
-                document.getElementById('pin-kamar-flame').innerText = r2.flame;
-                document.getElementById('pin-kamar-gas').innerText = r2.gas;
-
-                // Logika Animasi Denah Kamar (Hanya berkedip jika BAHAYA)
-                let pinKamar = document.getElementById('pinBoxKamar');
-                if (r2.status && r2.status.toUpperCase() === 'BAHAYA') {
-                    pinKamar.classList.add('pin-bahaya');
-                } else {
-                    pinKamar.classList.remove('pin-bahaya');
-                }
-
-                // 3. Update Grafik
-                const currentTime = new Date().toLocaleTimeString();
-                if (timeLabels.length > 15) timeLabels.shift();
-                timeLabels.push(currentTime);
-
-                gasChart.data.labels = timeLabels;
-                gasChart.data.datasets[0].data.push(r1.gas);
-                gasChart.data.datasets[1].data.push(r2.gas);
-                if (gasChart.data.datasets[0].data.length > 15) {
-                    gasChart.data.datasets[0].data.shift();
-                    gasChart.data.datasets[1].data.shift();
-                }
-                gasChart.update();
-
-                flameChart.data.labels = timeLabels;
-                flameChart.data.datasets[0].data.push(r1.flame);
-                flameChart.data.datasets[1].data.push(r2.flame);
-                if (flameChart.data.datasets[0].data.length > 15) {
-                    flameChart.data.datasets[0].data.shift();
-                    flameChart.data.datasets[1].data.shift();
-                }
-                flameChart.update();
+        // Fungsi utama memperbarui seluruh elemen layar
+        function perbaruiTampilanWeb(data, sumber) {
+            if (!data) {
+                document.getElementById('status-sistem').innerText = "Data Kosong (Null)";
+                return;
             }
-        });
+
+            const gasDapur     = data.gas_dapur ?? 0;
+            const gasKamar     = data.gas_kamar ?? 0;
+            const flameDapur   = data.flame_dapur ?? 4095;
+            const flameKamar   = data.flame_kamar ?? 4095;
+            const risikoDapur  = Math.round(data.risiko_dapur ?? 0);
+            const risikoKamar  = Math.round(data.risiko_kamar ?? 0);
+            const statusFSM    = (data.status || 'AMAN').toUpperCase();
+            const statusDetail = (data.status_detail || statusFSM).toUpperCase();
+
+            // Update Status Utama
+            const labelGlobal = (statusDetail !== statusFSM) ? `${statusFSM} (${statusDetail})` : statusFSM;
+            terapkanClassStatus(document.getElementById('status-sistem'), statusFSM, labelGlobal);
+            document.getElementById('last-sync-info').innerText = `Terhubung (${sumber}) • Update terakhir: ${new Date().toLocaleTimeString()}`;
+
+            // 1. Update Kartu & Denah Dapur
+            document.getElementById('gas-r1').innerText = `${gasDapur} ${gasDapur > 300 ? '(Meningkat)' : '(Aman)'}`;
+            document.getElementById('flame-r1').innerText = formatTeksApi(flameDapur, 1000);
+            document.getElementById('risiko-r1').innerText = risikoDapur;
+            
+            const statusDapur = statusDariRisiko(risikoDapur);
+            terapkanClassStatus(document.getElementById('status-r1'), statusDapur);
+
+            document.getElementById('pin-dapur-flame').innerText = flameDapur;
+            document.getElementById('pin-dapur-gas').innerText = gasDapur;
+
+            let pinDapur = document.getElementById('pinBoxDapur');
+            pinDapur.classList.remove('pin-bahaya', 'pin-waspada');
+            if (statusDapur === 'BAHAYA') pinDapur.classList.add('pin-bahaya');
+            else if (statusDapur === 'WASPADA') pinDapur.classList.add('pin-waspada');
+
+            // 2. Update Kartu & Denah Kamar
+            document.getElementById('gas-r2').innerText = `${gasKamar} ${gasKamar > 250 ? '(Meningkat)' : '(Aman)'}`;
+            document.getElementById('flame-r2').innerText = formatTeksApi(flameKamar, 700);
+            document.getElementById('risiko-r2').innerText = risikoKamar;
+
+            const statusKamar = statusDariRisiko(risikoKamar);
+            terapkanClassStatus(document.getElementById('status-r2'), statusKamar);
+
+            document.getElementById('pin-kamar-flame').innerText = flameKamar;
+            document.getElementById('pin-kamar-gas').innerText = gasKamar;
+
+            let pinKamar = document.getElementById('pinBoxKamar');
+            pinKamar.classList.remove('pin-bahaya', 'pin-waspada');
+            if (statusKamar === 'BAHAYA') pinKamar.classList.add('pin-bahaya');
+            else if (statusKamar === 'WASPADA') pinKamar.classList.add('pin-waspada');
+
+            // 3. Update Grafik
+            const currentTime = new Date().toLocaleTimeString();
+            if (timeLabels.length > 15) timeLabels.shift();
+            timeLabels.push(currentTime);
+
+            gasChart.data.labels = timeLabels;
+            gasChart.data.datasets[0].data.push(gasDapur);
+            gasChart.data.datasets[1].data.push(gasKamar);
+            if (gasChart.data.datasets[0].data.length > 15) {
+                gasChart.data.datasets[0].data.shift();
+                gasChart.data.datasets[1].data.shift();
+            }
+            gasChart.update();
+
+            flameChart.data.labels = timeLabels;
+            flameChart.data.datasets[0].data.push(flameDapur);
+            flameChart.data.datasets[1].data.push(flameKamar);
+            if (flameChart.data.datasets[0].data.length > 15) {
+                flameChart.data.datasets[0].data.shift();
+                flameChart.data.datasets[1].data.shift();
+            }
+            flameChart.update();
+        }
+
+        // JALUR 1: Firebase SDK (Realtime WebSocket)
+        try {
+            if (!firebase.apps.length) {
+                firebase.initializeApp({ databaseURL: DB_URL });
+            }
+            firebase.database().ref('firesafe/kamar_1').on('value', (snapshot) => {
+                websocketAktif = true;
+                perbaruiTampilanWeb(snapshot.val(), "Realtime Stream");
+            }, (error) => {
+                document.getElementById('status-sistem').innerText = "Error Firebase: " + error.message;
+                document.getElementById('status-sistem').className = "status-bahaya";
+            });
+        } catch (err) {
+            console.error("Init Firebase error:", err);
+        }
+
+        // JALUR 2: Cadangan HTTPS REST API (Otomatis berjalan jika WebSocket terblokir Wi-Fi/Browser)
+        async function ambilDataViaHTTPS() {
+            if (websocketAktif) return;
+            try {
+                const response = await fetch(`${DB_URL}/firesafe/kamar_1.json`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status} (Cek Rules Firebase)`);
+                }
+                const data = await response.json();
+                perbaruiTampilanWeb(data, "HTTPS Sync");
+            } catch (err) {
+                document.getElementById('last-sync-info').innerText = "Gagal ambil data: " + err.message;
+            }
+        }
+
+        ambilDataViaHTTPS();
+        setInterval(ambilDataViaHTTPS, 3000);
     </script>
 
 </body>
